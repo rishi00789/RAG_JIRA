@@ -139,7 +139,13 @@ class LangChainJIRARAGMCPServer:
     def extract_sprint_name(self, question: str) -> Optional[str]:
         """Extract sprint name from question"""
         import re
-        # Look for patterns like "sprint 1", "sprint 2", "current sprint", etc.
+        question_lower = question.lower()
+        
+        # If it's just asking for sprint report without specific sprint, return current
+        if any(phrase in question_lower for phrase in ['sprint report', 'sprint status', 'sprint summary', 'current sprint']):
+            return 'current'
+        
+        # Look for specific sprint patterns
         patterns = [
             r'sprint\s+(\d+)',
             r'sprint\s+([a-zA-Z0-9\s]+)',
@@ -148,25 +154,33 @@ class LangChainJIRARAGMCPServer:
         ]
         
         for pattern in patterns:
-            match = re.search(pattern, question.lower())
+            match = re.search(pattern, question_lower)
             if match:
                 return match.group(1) if match.groups() else 'current'
-        return None
+        
+        # Default to current sprint if no specific sprint mentioned
+        return 'current'
 
     def extract_sprint_count(self, question: str) -> int:
         """Extract number of sprints for velocity report"""
         import re
+        question_lower = question.lower()
+        
+        # If no specific count mentioned, default to 5
         patterns = [
             r'last\s+(\d+)\s+sprints',
             r'(\d+)\s+sprints',
-            r'past\s+(\d+)\s+sprints'
+            r'past\s+(\d+)\s+sprints',
+            r'(\d+)\s+recent\s+sprints'
         ]
         
         for pattern in patterns:
-            match = re.search(pattern, question.lower())
+            match = re.search(pattern, question_lower)
             if match:
                 return int(match.group(1))
-        return 5  # Default to last 5 sprints
+        
+        # Default to last 5 sprints if no specific count mentioned
+        return 5
 
     def save_csv_to_downloads(self, csv_content: str, filename: str) -> str:
         """Save CSV content to downloads folder and return the file path"""
@@ -199,32 +213,38 @@ class LangChainJIRARAGMCPServer:
                 raise Exception("JIRA operations not available")
             
             # Get current sprint or specified sprint
+            boards = self.jira_ops.get_agile_boards()
+            if not boards:
+                raise Exception("No agile boards found")
+            
+            sprint_id = None
+            sprint_name_final = sprint_name
+            
             if sprint_name == 'current' or sprint_name is None:
-                # Get current active sprint
-                sprints = self.jira_ops.get_agile_boards()
-                if not sprints:
-                    raise Exception("No agile boards found")
-                
-                # Get current sprint from the first board
-                board_id = sprints[0]['id']
+                # Get current active sprint from the first board
+                board_id = boards[0]['id']
                 current_sprint = self.jira_ops.get_current_sprint(board_id)
-                if not current_sprint:
-                    raise Exception("No current sprint found")
-                
-                sprint_id = current_sprint['id']
-                sprint_name = current_sprint['name']
+                if current_sprint:
+                    sprint_id = current_sprint['id']
+                    sprint_name_final = current_sprint.get('name', 'Current Sprint')
+                else:
+                    # Fallback: get the most recent sprint
+                    all_sprints = self.jira_ops.get_sprints(board_id)
+                    if all_sprints:
+                        # Sort by start date and get the most recent
+                        all_sprints.sort(key=lambda x: x.get('startDate', ''), reverse=True)
+                        sprint_id = all_sprints[0]['id']
+                        sprint_name_final = all_sprints[0].get('name', 'Recent Sprint')
+                    else:
+                        raise Exception("No sprints found")
             else:
                 # Find sprint by name
-                boards = self.jira_ops.get_agile_boards()
-                if not boards:
-                    raise Exception("No agile boards found")
-                
-                sprint_id = None
                 for board in boards:
                     board_sprints = self.jira_ops.get_sprints(board['id'])
                     for sprint in board_sprints:
                         if sprint.get('name', '').lower() == sprint_name.lower():
                             sprint_id = sprint['id']
+                            sprint_name_final = sprint['name']
                             break
                     if sprint_id:
                         break
@@ -248,7 +268,7 @@ class LangChainJIRARAGMCPServer:
                     'priority': issue.get('priority', ''),
                     'created': issue.get('created', ''),
                     'updated': issue.get('updated', ''),
-                    'sprint': sprint_name
+                    'sprint': sprint_name_final
                 })
             
             return sprint_data
@@ -274,17 +294,20 @@ class LangChainJIRARAGMCPServer:
             board_id = boards[0]['id']
             sprints = self.jira_ops.get_sprints(board_id)
             
+            if not sprints:
+                raise Exception("No sprints found")
+            
             # Sort sprints by start date (most recent first)
-            sprints.sort(key=lambda x: x.get('start_date', ''), reverse=True)
+            sprints.sort(key=lambda x: x.get('startDate', ''), reverse=True)
             
             # Take the specified number of sprints
             recent_sprints = sprints[:sprint_count]
             
             for sprint in recent_sprints:
                 sprint_id = sprint['id']
-                sprint_name = sprint['name']
-                start_date = sprint.get('start_date', '')
-                end_date = sprint.get('end_date', '')
+                sprint_name = sprint.get('name', 'Unknown Sprint')
+                start_date = sprint.get('startDate', '')
+                end_date = sprint.get('endDate', '')
                 
                 # Get sprint issues
                 sprint_issues = self.jira_ops.get_sprint_stories(sprint_id)

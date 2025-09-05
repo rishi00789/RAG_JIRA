@@ -175,9 +175,9 @@ class LangChainJIRARAGMCPServer:
                         "error": "No sprint data found"
                     })
                 
-                # Always generate CSV and save to downloads folder
+                # Always generate CSV and save to reports/sprint_report folder
                 csv_content = self._generate_sprint_csv(sprint_data)
-                file_path = self._save_csv_to_downloads(csv_content, f"sprint_report_{sprint_name}")
+                file_path = self._save_csv_to_downloads(csv_content, f"sprint_report_{sprint_name}", "sprint_report")
                 
                 return json.dumps({
                     "success": True,
@@ -227,9 +227,9 @@ class LangChainJIRARAGMCPServer:
                         "error": "No velocity data found"
                     })
                 
-                # Always generate CSV and save to downloads folder
+                # Always generate CSV and save to reports/velocity_report folder
                 csv_content = self._generate_velocity_csv(velocity_data)
-                file_path = self._save_csv_to_downloads(csv_content, f"velocity_report_{sprint_count}_sprints")
+                file_path = self._save_csv_to_downloads(csv_content, f"velocity_report_{sprint_count}_sprints", "velocity_report")
                 
                 return json.dumps({
                     "success": True,
@@ -556,17 +556,18 @@ class LangChainJIRARAGMCPServer:
         
         return output.getvalue()
     
-    def _save_csv_to_downloads(self, csv_content: str, filename: str) -> str:
-        """Save CSV content to downloads folder"""
+    def _save_csv_to_downloads(self, csv_content: str, filename: str, report_type: str = "sprint_report") -> str:
+        """Save CSV content to reports folder with organized subfolders"""
         try:
-            # Create downloads directory
-            downloads_dir = Path("downloads")
-            downloads_dir.mkdir(exist_ok=True)
+            # Create reports directory structure
+            reports_dir = Path("reports")
+            report_subdir = reports_dir / report_type
+            report_subdir.mkdir(parents=True, exist_ok=True)
             
             # Generate unique filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             full_filename = f"{filename}_{timestamp}.csv"
-            file_path = downloads_dir / full_filename
+            file_path = report_subdir / full_filename
             
             # Write CSV content
             with open(file_path, 'w', newline='', encoding='utf-8') as f:

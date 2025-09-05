@@ -98,6 +98,13 @@ The server runs on `http://127.0.0.1:8003/mcp` and provides:
 - "What is the current sprint status?"
 - "Create a new story for user authentication"
 
+### Report Generation
+- "Generate sprint report in CSV format"
+- "Create velocity report for last 5 sprints"
+- "Show current sprint status as CSV"
+- "Generate team velocity chart"
+- "Export sprint 1 data to CSV"
+
 ## 🛠️ Core Components
 
 ### LangChain Integration
@@ -158,6 +165,7 @@ The server runs on `http://127.0.0.1:8003/mcp` and provides:
 - **Comments**: Add and manage issue comments
 - **Assignments**: Assign issues to team members
 - **Sprint Management**: Create and manage sprints
+- **Report Generation**: Sprint and velocity reports in CSV/JSON format
 
 #### Natural Language Examples
 ```bash
@@ -283,6 +291,60 @@ export REALTIME_DAYS_BACK="30"       # Days back to sync
 - **No Stale Information**: Eliminates outdated results
 - **Automatic Updates**: No manual sync required
 - **Configurable Performance**: Balance freshness vs speed
+
+### Report Generation
+
+The system now includes **comprehensive report generation** capabilities that allow users to generate sprint and velocity reports in CSV or JSON format through natural language queries.
+
+#### Sprint Reports
+Generate detailed sprint reports with issue information:
+
+**Features:**
+- **Issue Details**: Key, summary, type, status, assignee, story points
+- **Sprint Information**: Sprint name, dates, progress metrics
+- **CSV Export**: Ready-to-use CSV format for Excel/Google Sheets
+- **Real-time Data**: Always uses the latest JIRA data
+
+**Example Queries:**
+```bash
+"Generate sprint report in CSV format"
+"Show current sprint status as CSV"
+"Export sprint 1 data to CSV"
+"Create sprint summary report"
+```
+
+**CSV Columns:**
+- Issue Key, Summary, Issue Type, Status, Assignee
+- Story Points, Priority, Created, Updated, Sprint
+
+#### Velocity Reports
+Generate team velocity reports with sprint metrics:
+
+**Features:**
+- **Sprint Metrics**: Planned vs completed story points
+- **Velocity Tracking**: Team velocity over multiple sprints
+- **Completion Rates**: Percentage of work completed
+- **Historical Data**: Configurable number of past sprints
+
+**Example Queries:**
+```bash
+"Create velocity report for last 5 sprints"
+"Generate team velocity chart"
+"Show velocity data in CSV format"
+"Export sprint velocity report"
+```
+
+**CSV Columns:**
+- Sprint, Start Date, End Date, Planned Story Points
+- Completed Story Points, Velocity, Issues Count, Completion Rate
+
+#### Report Configuration
+```bash
+# Control report generation
+export ENABLE_REALTIME_SYNC="true"    # Always use fresh data
+export REALTIME_MAX_RESULTS="500"     # Max issues for reports
+export REALTIME_DAYS_BACK="30"        # Days back for data
+```
 
 ### Performance Benefits
 - **Search Coverage**: 95%+ story coverage

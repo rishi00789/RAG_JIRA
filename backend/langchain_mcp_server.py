@@ -496,8 +496,12 @@ class LangChainJIRARAGMCPServer:
                 if report_request['type'] == 'sprint_report':
                     logger.info("📊 Generating sprint report...")
                     try:
-                        # Get sprint data from JIRA
-                        sprint_data = await self.generate_sprint_data(report_request.get('sprint_name'))
+                        # Add timeout for sprint data generation
+                        import asyncio
+                        sprint_data = await asyncio.wait_for(
+                            self.generate_sprint_data(report_request.get('sprint_name')),
+                            timeout=30.0  # 30 second timeout
+                        )
                         
                         if report_request['format'] == 'csv':
                             csv_content = self.generate_sprint_report_csv(sprint_data)
@@ -537,6 +541,15 @@ class LangChainJIRARAGMCPServer:
                                 "sync_performed": sync_performed,
                                 "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
                             }, indent=2)
+                    except asyncio.TimeoutError:
+                        logger.error("❌ Sprint report generation timed out")
+                        return json.dumps({
+                            "answer": "❌ Sprint report generation timed out. Please try again.",
+                            "sources": [],
+                            "context": [],
+                            "success": False,
+                            "error": "Timeout"
+                        }, indent=2)
                     except Exception as e:
                         logger.error(f"❌ Sprint report generation failed: {e}")
                         return json.dumps({
@@ -550,8 +563,12 @@ class LangChainJIRARAGMCPServer:
                 elif report_request['type'] == 'velocity_report':
                     logger.info("📊 Generating velocity report...")
                     try:
-                        # Get velocity data from JIRA
-                        velocity_data = await self.generate_velocity_data(report_request.get('sprint_count', 5))
+                        # Add timeout for velocity data generation
+                        import asyncio
+                        velocity_data = await asyncio.wait_for(
+                            self.generate_velocity_data(report_request.get('sprint_count', 5)),
+                            timeout=30.0  # 30 second timeout
+                        )
                         
                         if report_request['format'] == 'csv':
                             csv_content = self.generate_velocity_report_csv(velocity_data)
@@ -591,6 +608,15 @@ class LangChainJIRARAGMCPServer:
                                 "sync_performed": sync_performed,
                                 "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
                             }, indent=2)
+                    except asyncio.TimeoutError:
+                        logger.error("❌ Velocity report generation timed out")
+                        return json.dumps({
+                            "answer": "❌ Velocity report generation timed out. Please try again.",
+                            "sources": [],
+                            "context": [],
+                            "success": False,
+                            "error": "Timeout"
+                        }, indent=2)
                     except Exception as e:
                         logger.error(f"❌ Velocity report generation failed: {e}")
                         return json.dumps({

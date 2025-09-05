@@ -13,6 +13,7 @@ import csv
 import io
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
+from pathlib import Path
 from dotenv import load_dotenv
 
 from fastmcp import FastMCP
@@ -110,20 +111,27 @@ class LangChainJIRARAGMCPServer:
         """Detect if the question is requesting a report generation"""
         question_lower = question.lower()
         
+        # Check for explicit CSV format requests
+        is_csv_request = any(csv_keyword in question_lower for csv_keyword in [
+            '.csv', 'csv format', 'csv file', 'as csv', 'in csv', 'export csv', 'download csv'
+        ])
+        
         # Sprint report detection
-        if any(keyword in question_lower for keyword in ['sprint report', 'sprint summary', 'sprint status', 'current sprint']):
+        if any(keyword in question_lower for keyword in ['sprint report', 'sprint summary', 'sprint status', 'current sprint', 'sprint data']):
             return {
                 'type': 'sprint_report',
                 'sprint_name': self.extract_sprint_name(question),
-                'format': 'csv' if 'csv' in question_lower else 'json'
+                'format': 'csv' if is_csv_request else 'json',
+                'save_file': is_csv_request
             }
         
         # Velocity report detection
-        if any(keyword in question_lower for keyword in ['velocity report', 'velocity chart', 'sprint velocity', 'team velocity']):
+        if any(keyword in question_lower for keyword in ['velocity report', 'velocity chart', 'sprint velocity', 'team velocity', 'velocity data']):
             return {
                 'type': 'velocity_report',
                 'sprint_count': self.extract_sprint_count(question),
-                'format': 'csv' if 'csv' in question_lower else 'json'
+                'format': 'csv' if is_csv_request else 'json',
+                'save_file': is_csv_request
             }
         
         return {'type': 'regular_query'}
@@ -159,6 +167,30 @@ class LangChainJIRARAGMCPServer:
             if match:
                 return int(match.group(1))
         return 5  # Default to last 5 sprints
+
+    def save_csv_to_downloads(self, csv_content: str, filename: str) -> str:
+        """Save CSV content to downloads folder and return the file path"""
+        try:
+            # Create downloads directory if it doesn't exist
+            downloads_dir = Path("downloads")
+            downloads_dir.mkdir(exist_ok=True)
+            
+            # Generate unique filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            base_name = filename.replace(" ", "_").lower()
+            full_filename = f"{base_name}_{timestamp}.csv"
+            file_path = downloads_dir / full_filename
+            
+            # Write CSV content to file
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                f.write(csv_content)
+            
+            logger.info(f"📁 CSV file saved to: {file_path}")
+            return str(file_path)
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to save CSV file: {e}")
+            return None
 
     async def generate_sprint_data(self, sprint_name: Optional[str] = None) -> List[Dict]:
         """Generate sprint data from JIRA"""
@@ -341,10 +373,11 @@ class LangChainJIRARAGMCPServer:
             - Hybrid retrieval with vector search and JQL queries
             
             Report Generation Examples:
-            - "Generate sprint report in CSV format"
-            - "Create velocity report for last 5 sprints"
-            - "Show current sprint status as CSV"
-            - "Generate team velocity chart"
+            - "Generate sprint report in CSV format" (saves to downloads folder)
+            - "Create velocity report for last 5 sprints as CSV" (saves to downloads folder)
+            - "Show current sprint status as CSV" (saves to downloads folder)
+            - "Generate team velocity chart" (JSON format)
+            - "Export sprint data to CSV file" (saves to downloads folder)
             
             Args:
                 question: The user's question, request, or report generation command
@@ -440,14 +473,28 @@ class LangChainJIRARAGMCPServer:
                         
                         if report_request['format'] == 'csv':
                             csv_content = self.generate_sprint_report_csv(sprint_data)
+                            
+                            # Save CSV file if requested
+                            file_path = None
+                            if report_request.get('save_file', False):
+                                sprint_name = report_request.get('sprint_name', 'current_sprint')
+                                filename = f"sprint_report_{sprint_name}"
+                                file_path = self.save_csv_to_downloads(csv_content, filename)
+                            
+                            response_message = f"📊 Sprint Report Generated\n\nReport contains {len(sprint_data)} issues from the sprint."
+                            if file_path:
+                                response_message += f"\n\n📁 CSV file saved to: {file_path}"
+                            
                             return json.dumps({
-                                "answer": f"📊 Sprint Report Generated\n\nReport contains {len(sprint_data)} issues from the sprint.",
+                                "answer": response_message,
                                 "sources": sprint_data,
                                 "context": [],
                                 "success": True,
                                 "report_type": "sprint_report",
                                 "report_format": "csv",
                                 "csv_content": csv_content,
+                                "file_saved": file_path is not None,
+                                "file_path": file_path,
                                 "sync_performed": sync_performed,
                                 "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
                             }, indent=2)
@@ -480,14 +527,28 @@ class LangChainJIRARAGMCPServer:
                         
                         if report_request['format'] == 'csv':
                             csv_content = self.generate_velocity_report_csv(velocity_data)
+                            
+                            # Save CSV file if requested
+                            file_path = None
+                            if report_request.get('save_file', False):
+                                sprint_count = report_request.get('sprint_count', 5)
+                                filename = f"velocity_report_{sprint_count}_sprints"
+                                file_path = self.save_csv_to_downloads(csv_content, filename)
+                            
+                            response_message = f"📊 Velocity Report Generated\n\nReport contains data for {len(velocity_data)} sprints."
+                            if file_path:
+                                response_message += f"\n\n📁 CSV file saved to: {file_path}"
+                            
                             return json.dumps({
-                                "answer": f"📊 Velocity Report Generated\n\nReport contains data for {len(velocity_data)} sprints.",
+                                "answer": response_message,
                                 "sources": velocity_data,
                                 "context": [],
                                 "success": True,
                                 "report_type": "velocity_report",
                                 "report_format": "csv",
                                 "csv_content": csv_content,
+                                "file_saved": file_path is not None,
+                                "file_path": file_path,
                                 "sync_performed": sync_performed,
                                 "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
                             }, indent=2)

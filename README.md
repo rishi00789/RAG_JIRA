@@ -99,11 +99,11 @@ The server runs on `http://127.0.0.1:8003/mcp` and provides:
 - "Create a new story for user authentication"
 
 ### Report Generation
-- "Generate sprint report in CSV format"
-- "Create velocity report for last 5 sprints"
-- "Show current sprint status as CSV"
-- "Generate team velocity chart"
-- "Export sprint 1 data to CSV"
+- "Generate sprint report in CSV format" (saves to downloads folder)
+- "Create velocity report for last 5 sprints as CSV" (saves to downloads folder)
+- "Show current sprint status as CSV" (saves to downloads folder)
+- "Generate team velocity chart" (JSON format)
+- "Export sprint 1 data to CSV file" (saves to downloads folder)
 
 ## 🛠️ Core Components
 
@@ -337,6 +337,33 @@ Generate team velocity reports with sprint metrics:
 **CSV Columns:**
 - Sprint, Start Date, End Date, Planned Story Points
 - Completed Story Points, Velocity, Issues Count, Completion Rate
+
+#### Automatic CSV File Saving
+
+When users explicitly request CSV format, the system automatically saves files to the `/downloads` folder:
+
+**Automatic Detection:**
+The system recognizes these CSV keywords:
+- `.csv`, `csv format`, `csv file`, `as csv`, `in csv`, `export csv`, `download csv`
+
+**File Naming:**
+- Sprint reports: `sprint_report_{sprint_name}_{timestamp}.csv`
+- Velocity reports: `velocity_report_{sprint_count}_sprints_{timestamp}.csv`
+
+**Example Queries that trigger file saving:**
+```bash
+"Generate sprint report in CSV format"
+"Create velocity report for last 5 sprints as CSV"
+"Show current sprint status as CSV"
+"Export sprint data to CSV file"
+"Download velocity chart as CSV"
+```
+
+**Response includes:**
+- File path where CSV was saved
+- Confirmation message
+- CSV content in JSON response
+- File saved status
 
 #### Report Configuration
 ```bash

@@ -146,17 +146,16 @@ class LangChainJIRARAGMCPServer:
                 })
         
         @self.fastmcp.tool()
-        async def sprint_report(sprint_name: str = "current", format: str = "json", save_file: bool = False) -> str:
+        async def sprint_report(sprint_name: str = "all") -> str:
             """
             Generate sprint report with issues and details.
+            Automatically saves CSV file to downloads folder.
             
             Args:
-                sprint_name: Sprint name or "current" for active sprint (default: "current")
-                format: Output format - "json" or "csv" (default: "json")
-                save_file: Whether to save CSV file to downloads folder (default: False)
+                sprint_name: Sprint name, "current" for active sprint, or "all" for all board issues (default: "all")
             
             Returns:
-                JSON string with sprint data or CSV content
+                JSON string with sprint data and file path
             """
             try:
                 logger.info(f"📊 Generating sprint report for: {sprint_name}")
@@ -176,37 +175,20 @@ class LangChainJIRARAGMCPServer:
                         "error": "No sprint data found"
                     })
                 
-                if format.lower() == "csv":
-                    csv_content = self._generate_sprint_csv(sprint_data)
-                    
-                    if save_file:
-                        file_path = self._save_csv_to_downloads(csv_content, f"sprint_report_{sprint_name}")
-                        return json.dumps({
-                            "success": True,
-                            "format": "csv",
-                            "content": csv_content,
-                            "file_saved": True,
-                            "file_path": file_path,
-                            "sprint_name": sprint_name,
-                            "issues_count": len(sprint_data)
-                        })
-                    else:
-                        return json.dumps({
-                            "success": True,
-                            "format": "csv",
-                            "content": csv_content,
-                            "file_saved": False,
-                            "sprint_name": sprint_name,
-                            "issues_count": len(sprint_data)
-                        })
-                else:
-                    return json.dumps({
-                        "success": True,
-                        "format": "json",
-                        "data": sprint_data,
-                        "sprint_name": sprint_name,
-                        "issues_count": len(sprint_data)
-                    })
+                # Always generate CSV and save to downloads folder
+                csv_content = self._generate_sprint_csv(sprint_data)
+                file_path = self._save_csv_to_downloads(csv_content, f"sprint_report_{sprint_name}")
+                
+                return json.dumps({
+                    "success": True,
+                    "format": "csv",
+                    "content": csv_content,
+                    "file_saved": True,
+                    "file_path": file_path,
+                    "sprint_name": sprint_name,
+                    "issues_count": len(sprint_data),
+                    "message": f"✅ Sprint report generated and saved to {file_path}"
+                })
                 
             except Exception as e:
                 logger.error(f"❌ Error generating sprint report: {e}")
@@ -216,17 +198,16 @@ class LangChainJIRARAGMCPServer:
                 })
         
         @self.fastmcp.tool()
-        async def velocity_report(sprint_count: int = 5, format: str = "json", save_file: bool = False) -> str:
+        async def velocity_report(sprint_count: int = 5) -> str:
             """
             Generate velocity report for multiple sprints.
+            Automatically saves CSV file to downloads folder.
             
             Args:
                 sprint_count: Number of recent sprints to analyze (default: 5)
-                format: Output format - "json" or "csv" (default: "json")
-                save_file: Whether to save CSV file to downloads folder (default: False)
             
             Returns:
-                JSON string with velocity data or CSV content
+                JSON string with velocity data and file path
             """
             try:
                 logger.info(f"📈 Generating velocity report for last {sprint_count} sprints")
@@ -246,37 +227,20 @@ class LangChainJIRARAGMCPServer:
                         "error": "No velocity data found"
                     })
                 
-                if format.lower() == "csv":
-                    csv_content = self._generate_velocity_csv(velocity_data)
-                    
-                    if save_file:
-                        file_path = self._save_csv_to_downloads(csv_content, f"velocity_report_{sprint_count}_sprints")
-                        return json.dumps({
-                            "success": True,
-                            "format": "csv",
-                            "content": csv_content,
-                            "file_saved": True,
-                            "file_path": file_path,
-                            "sprint_count": sprint_count,
-                            "sprints_analyzed": len(velocity_data)
-                        })
-                    else:
-                        return json.dumps({
-                            "success": True,
-                            "format": "csv",
-                            "content": csv_content,
-                            "file_saved": False,
-                            "sprint_count": sprint_count,
-                            "sprints_analyzed": len(velocity_data)
-                        })
-                else:
-                    return json.dumps({
-                        "success": True,
-                        "format": "json",
-                        "data": velocity_data,
-                        "sprint_count": sprint_count,
-                        "sprints_analyzed": len(velocity_data)
-                    })
+                # Always generate CSV and save to downloads folder
+                csv_content = self._generate_velocity_csv(velocity_data)
+                file_path = self._save_csv_to_downloads(csv_content, f"velocity_report_{sprint_count}_sprints")
+                
+                return json.dumps({
+                    "success": True,
+                    "format": "csv",
+                    "content": csv_content,
+                    "file_saved": True,
+                    "file_path": file_path,
+                    "sprint_count": sprint_count,
+                    "sprints_analyzed": len(velocity_data),
+                    "message": f"✅ Velocity report generated and saved to {file_path}"
+                })
                 
             except Exception as e:
                 logger.error(f"❌ Error generating velocity report: {e}")
@@ -370,9 +334,12 @@ class LangChainJIRARAGMCPServer:
             if not boards:
                 return []
             
-            sprint_id = None
-            if sprint_name == "current":
-                board_id = boards[0]['id']
+            board_id = boards[0]['id']
+            
+            if sprint_name == "all":
+                # Get all issues from the board using JQL
+                return self._get_all_board_issues(board_id)
+            elif sprint_name == "current":
                 current_sprint = self.jira_ops.get_current_sprint(board_id)
                 if current_sprint:
                     sprint_id = current_sprint['id']
@@ -382,44 +349,101 @@ class LangChainJIRARAGMCPServer:
                     if all_sprints:
                         all_sprints.sort(key=lambda x: x.get('startDate', ''), reverse=True)
                         sprint_id = all_sprints[0]['id']
+                    else:
+                        return []
             else:
                 # Find sprint by name
-                for board in boards:
-                    sprints = self.jira_ops.get_sprints(board['id'])
-                    for sprint in sprints:
-                        if sprint.get('name', '').lower() == sprint_name.lower():
-                            sprint_id = sprint['id']
-                            break
-                    if sprint_id:
+                sprints = self.jira_ops.get_sprints(board_id)
+                sprint_id = None
+                for sprint in sprints:
+                    if sprint.get('name', '').lower() == sprint_name.lower():
+                        sprint_id = sprint['id']
                         break
+                
+                if not sprint_id:
+                    return []
             
-            if not sprint_id:
-                return []
-            
-            # Get sprint issues
+            # Get sprint issues (already formatted by jira_operations)
             issues = self.jira_ops.get_sprint_stories(sprint_id)
             
-            # Format the data
+            # The data is already formatted, just add sprint name
             sprint_data = []
             for issue in issues:
-                fields = issue.get('fields', {})
-                sprint_data.append({
-                    'key': issue.get('key', ''),
-                    'summary': fields.get('summary', ''),
-                    'issue_type': fields.get('issuetype', {}).get('name', ''),
-                    'status': fields.get('status', {}).get('name', ''),
-                    'assignee': fields.get('assignee', {}).get('displayName', 'Unassigned'),
-                    'story_points': fields.get('customfield_10016', ''),
-                    'priority': fields.get('priority', {}).get('name', ''),
-                    'created': fields.get('created', ''),
-                    'updated': fields.get('updated', ''),
-                    'sprint': sprint_name
-                })
+                issue['sprint'] = sprint_name
+                # Ensure assignee shows 'Unassigned' if empty
+                if not issue.get('assignee'):
+                    issue['assignee'] = 'Unassigned'
+                sprint_data.append(issue)
             
             return sprint_data
             
         except Exception as e:
             logger.error(f"❌ Error getting sprint data: {e}")
+            return []
+    
+    def _get_all_board_issues(self, board_id: int) -> List[Dict]:
+        """Get all issues from the board using JQL"""
+        try:
+            # First get the board details to find the project key
+            board_url = f"{self.jira_ops.base_url}/rest/agile/1.0/board/{board_id}"
+            board_response = self.jira_ops.session.get(board_url, timeout=(10, 30))
+            board_response.raise_for_status()
+            board_data = board_response.json()
+            
+            # Get project keys from the board
+            project_keys = []
+            for project in board_data.get('location', {}).get('projectKeys', []):
+                project_keys.append(project)
+            
+            if not project_keys:
+                # Fallback: get all projects
+                project_url = f"{self.jira_ops.base_url}/rest/api/2/project"
+                project_response = self.jira_ops.session.get(project_url, timeout=(10, 30))
+                project_response.raise_for_status()
+                projects = project_response.json()
+                project_keys = [p['key'] for p in projects]
+            
+            # Use JIRA search API to get all issues from the projects
+            jql_query = f"project in ({','.join(project_keys)}) ORDER BY updated DESC"
+            url = f"{self.jira_ops.base_url}/rest/api/2/search"
+            params = {
+                'jql': jql_query,
+                'maxResults': 1000,
+                'fields': 'summary,description,issuetype,status,assignee,priority,created,updated,customfield_10016'
+            }
+            
+            response = self.jira_ops.session.get(url, params=params, timeout=(10, 30))
+            response.raise_for_status()
+            
+            data = response.json()
+            issues = data.get('issues', [])
+            
+            # Format issues the same way as get_sprint_stories
+            formatted_issues = []
+            for issue in issues:
+                fields = issue.get('fields', {})
+                formatted_issues.append({
+                    'key': issue.get('key'),
+                    'summary': fields.get('summary', ''),
+                    'issue_type': fields.get('issuetype', {}).get('name', ''),
+                    'status': fields.get('status', {}).get('name', ''),
+                    'assignee': fields.get('assignee', {}).get('displayName', '') if fields.get('assignee') else '',
+                    'priority': fields.get('priority', {}).get('name', ''),
+                    'created': fields.get('created', ''),
+                    'updated': fields.get('updated', ''),
+                    'story_points': fields.get('customfield_10016', 0),
+                    'sprint': 'all'
+                })
+            
+            # Ensure assignee shows 'Unassigned' if empty
+            for issue in formatted_issues:
+                if not issue.get('assignee'):
+                    issue['assignee'] = 'Unassigned'
+            
+            return formatted_issues
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting all board issues: {e}")
             return []
     
     def _get_velocity_data(self, sprint_count: int) -> List[Dict]:
@@ -449,9 +473,8 @@ class LangChainJIRARAGMCPServer:
                 completed_issues = 0
                 
                 for issue in issues:
-                    fields = issue.get('fields', {})
-                    story_points = fields.get('customfield_10016', 0)
-                    status = fields.get('status', {}).get('name', '').lower()
+                    story_points = issue.get('story_points', 0)
+                    status = issue.get('status', '').lower()
                     
                     if story_points:
                         planned_points += story_points

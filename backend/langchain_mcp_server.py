@@ -25,10 +25,9 @@ logger = logging.getLogger(__name__)
 try:
     from langchain_milvus_store import MilvusVectorStore
     from langchain_rag_chain import JiraRAGChain, create_jira_rag_chain
-    from langchain_jira_loader import JiraDocumentLoader, JiraRealtimeLoader
+    from langchain_jira_loader import JiraDocumentLoader
     from jira_operations import get_jira_operations
     from action_detector import detect_jira_action, ActionType
-    from realtime_jira_sync import get_realtime_sync
     LANGCHAIN_AVAILABLE = True
     JIRA_OPS_AVAILABLE = True
     logger.info("✅ All LangChain modules loaded successfully")
@@ -46,7 +45,6 @@ class LangChainJIRARAGMCPServer:
         self.rag_chain = None
         self.vector_store = None
         self.is_connected = False
-        self.sync_cache_duration = int(os.getenv("SYNC_CACHE_DURATION", "5"))
         self.setup_tools()
         self.initialize_connections()
         
@@ -127,53 +125,7 @@ class LangChainJIRARAGMCPServer:
                     signal.alarm(30)  # 30 seconds for fast mode
                     logger.info("⚡ Fast mode enabled - reduced timeout to 30 seconds")
                 
-                # 🚀 OPTIONAL REAL-TIME SYNC: Only sync if explicitly requested or data is stale
-                sync_performed = False
-                if not fast_mode and self.vector_store:
-                    try:
-                        realtime_sync = get_realtime_sync()
-                        sync_status = realtime_sync.get_sync_status()
-                        
-                        # Only sync if data is stale (older than 5 minutes) or explicitly requested
-                        should_sync = sync_status.get("should_sync", False)
-                        if should_sync or "sync" in question.lower() or "latest" in question.lower():
-                            logger.info("🔄 Performing real-time sync for latest JIRA data...")
-                            
-                            # Use timeout for sync operation
-                            def sync_timeout_handler(signum, frame):
-                                raise TimeoutError("Sync operation timed out")
-                            
-                            signal.signal(signal.SIGALRM, sync_timeout_handler)
-                            signal.alarm(15)  # 15 second timeout for sync
-                            
-                            try:
-                                # Use LangChain document loader for real-time sync
-                                realtime_loader = JiraRealtimeLoader(
-                                    project_key=os.getenv("JIRA_PROJECT_KEY", "ALL"),
-                                    max_results=500,
-                                    days_back=30
-                                )
-                                
-                                # Load recent documents
-                                recent_docs = realtime_loader.load_recent_updates()
-                                
-                                if recent_docs:
-                                    # Clear existing collection and add new documents
-                                    self.vector_store.clear_collection()
-                                    self.vector_store.add_documents(recent_docs)
-                                    sync_performed = True
-                                    logger.info(f"✅ Real-time sync completed - loaded {len(recent_docs)} documents")
-                                else:
-                                    logger.info("ℹ️ No recent updates to sync")
-                                    
-                            finally:
-                                signal.alarm(0)  # Cancel the alarm
-                        else:
-                            logger.info("ℹ️ Using cached data (sync not needed)")
-                    except TimeoutError:
-                        logger.warning("⚠️ Real-time sync timed out, using existing data")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Real-time sync failed, using existing data: {e}")
+                # Process query using existing vector store data
                 
                 # Process query using LangChain RAG chain
                 logger.info("🔍 Processing query with LangChain RAG chain...")
@@ -195,13 +147,9 @@ class LangChainJIRARAGMCPServer:
                     include_jql_info=not fast_mode
                 )
                 
-                # Add sync information to result
-                if sync_performed:
-                    result["sync_performed"] = True
-                    result["sync_message"] = "Real-time sync completed - using latest data"
-                else:
-                    result["sync_performed"] = False
-                    result["sync_message"] = "Using cached data"
+                # Add processing information to result
+                result["sync_performed"] = False
+                result["sync_message"] = "Using existing vector store data"
                 
                 logger.info(f"✅ LangChain RAG query completed successfully")
                 return json.dumps(result, indent=2)

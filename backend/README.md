@@ -15,7 +15,6 @@ This directory contains the LangChain-powered RAG implementation for the JIRA As
 ### Supporting Components
 - **`jira_operations.py`** - JIRA API operations
 - **`action_detector.py`** - Action detection from user queries
-- **`realtime_jira_sync.py`** - Real-time data synchronization
 - **`langchain_ingest.py`** - LangChain-based data ingestion
 
 ## 🚀 Quick Start

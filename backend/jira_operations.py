@@ -32,6 +32,8 @@ class JiraOperations:
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         })
+        # Set timeout for all requests
+        self.session.timeout = (10, 30)  # (connect timeout, read timeout)
     
     def search_issues(self, jql: str, max_results: int = 100) -> Dict[str, Any]:
         """Search JIRA issues using JQL"""
@@ -165,7 +167,7 @@ class JiraOperations:
         """Get all agile boards"""
         try:
             url = f"{self.base_url}/rest/agile/1.0/board"
-            response = self.session.get(url)
+            response = self.session.get(url, timeout=(10, 30))
             response.raise_for_status()
             
             data = response.json()
@@ -180,7 +182,7 @@ class JiraOperations:
         try:
             url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint"
             params = {'state': 'active'}
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=(10, 30))
             response.raise_for_status()
             
             data = response.json()
@@ -196,7 +198,7 @@ class JiraOperations:
         try:
             url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint"
             params = {'maxResults': 50}
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=(10, 30))
             response.raise_for_status()
             
             data = response.json()
@@ -214,7 +216,7 @@ class JiraOperations:
                 'maxResults': 100,
                 'fields': 'summary,description,issuetype,status,assignee,priority,created,updated,customfield_10016'
             }
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=(10, 30))
             response.raise_for_status()
             
             data = response.json()

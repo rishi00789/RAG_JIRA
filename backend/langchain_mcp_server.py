@@ -206,7 +206,7 @@ class LangChainJIRARAGMCPServer:
             logger.error(f"❌ Failed to save CSV file: {e}")
             return None
 
-    async def generate_sprint_data(self, sprint_name: Optional[str] = None) -> List[Dict]:
+    def generate_sprint_data(self, sprint_name: Optional[str] = None) -> List[Dict]:
         """Generate sprint data from JIRA"""
         try:
             if not self.jira_ops:
@@ -277,7 +277,7 @@ class LangChainJIRARAGMCPServer:
             logger.error(f"Failed to generate sprint data: {e}")
             return []
 
-    async def generate_velocity_data(self, sprint_count: int = 5) -> List[Dict]:
+    def generate_velocity_data(self, sprint_count: int = 5) -> List[Dict]:
         """Generate velocity data from JIRA"""
         try:
             if not self.jira_ops:
@@ -496,12 +496,8 @@ class LangChainJIRARAGMCPServer:
                 if report_request['type'] == 'sprint_report':
                     logger.info("📊 Generating sprint report...")
                     try:
-                        # Add timeout for sprint data generation
-                        import asyncio
-                        sprint_data = await asyncio.wait_for(
-                            self.generate_sprint_data(report_request.get('sprint_name')),
-                            timeout=30.0  # 30 second timeout
-                        )
+                        # Generate sprint data (synchronous call)
+                        sprint_data = self.generate_sprint_data(report_request.get('sprint_name'))
                         
                         if report_request['format'] == 'csv':
                             csv_content = self.generate_sprint_report_csv(sprint_data)
@@ -541,15 +537,6 @@ class LangChainJIRARAGMCPServer:
                                 "sync_performed": sync_performed,
                                 "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
                             }, indent=2)
-                    except asyncio.TimeoutError:
-                        logger.error("❌ Sprint report generation timed out")
-                        return json.dumps({
-                            "answer": "❌ Sprint report generation timed out. Please try again.",
-                            "sources": [],
-                            "context": [],
-                            "success": False,
-                            "error": "Timeout"
-                        }, indent=2)
                     except Exception as e:
                         logger.error(f"❌ Sprint report generation failed: {e}")
                         return json.dumps({
@@ -563,12 +550,8 @@ class LangChainJIRARAGMCPServer:
                 elif report_request['type'] == 'velocity_report':
                     logger.info("📊 Generating velocity report...")
                     try:
-                        # Add timeout for velocity data generation
-                        import asyncio
-                        velocity_data = await asyncio.wait_for(
-                            self.generate_velocity_data(report_request.get('sprint_count', 5)),
-                            timeout=30.0  # 30 second timeout
-                        )
+                        # Generate velocity data (synchronous call)
+                        velocity_data = self.generate_velocity_data(report_request.get('sprint_count', 5))
                         
                         if report_request['format'] == 'csv':
                             csv_content = self.generate_velocity_report_csv(velocity_data)
@@ -608,15 +591,6 @@ class LangChainJIRARAGMCPServer:
                                 "sync_performed": sync_performed,
                                 "sync_message": "Real-time sync completed - using latest data" if sync_performed else "Using existing data"
                             }, indent=2)
-                    except asyncio.TimeoutError:
-                        logger.error("❌ Velocity report generation timed out")
-                        return json.dumps({
-                            "answer": "❌ Velocity report generation timed out. Please try again.",
-                            "sources": [],
-                            "context": [],
-                            "success": False,
-                            "error": "Timeout"
-                        }, indent=2)
                     except Exception as e:
                         logger.error(f"❌ Velocity report generation failed: {e}")
                         return json.dumps({

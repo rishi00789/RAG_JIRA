@@ -428,7 +428,7 @@ class LangChainJIRARAGMCPServer:
                             raise TimeoutError("Sync operation timed out")
                         
                         signal.signal(signal.SIGALRM, sync_timeout_handler)
-                        signal.alarm(10)  # 10 second timeout for sync
+                        signal.alarm(5)  # 5 second timeout for sync
                         
                         try:
                             # Use LangChain document loader for real-time sync
@@ -436,8 +436,8 @@ class LangChainJIRARAGMCPServer:
                             
                             realtime_loader = JiraRealtimeLoader(
                                 project_key=os.getenv("JIRA_PROJECT_KEY", "ALL"),
-                                max_results=int(os.getenv("REALTIME_MAX_RESULTS", "500")),
-                                days_back=int(os.getenv("REALTIME_DAYS_BACK", "30"))
+                                max_results=int(os.getenv("REALTIME_MAX_RESULTS", "50")),
+                                days_back=int(os.getenv("REALTIME_DAYS_BACK", "7"))
                             )
                             
                             # Load recent documents
@@ -464,6 +464,11 @@ class LangChainJIRARAGMCPServer:
                 
                 # 📊 REPORT GENERATION: Check if this is a report request
                 report_request = self.detect_report_request(question)
+                
+                # Skip real-time sync for report generation to avoid timeouts
+                if report_request['type'] != 'regular_query':
+                    sync_performed = False
+                    logger.info("ℹ️ Skipping real-time sync for report generation to ensure fast response")
                 
                 if report_request['type'] == 'sprint_report':
                     logger.info("📊 Generating sprint report...")

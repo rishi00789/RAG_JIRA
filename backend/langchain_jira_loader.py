@@ -65,6 +65,8 @@ class JiraDocumentLoader(BaseLoader):
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         })
+        # Set timeout for all requests
+        self.session.timeout = (10, 30)  # (connect timeout, read timeout)
     
     def load(self) -> List[Document]:
         """Load JIRA documents"""
@@ -145,7 +147,7 @@ class JiraDocumentLoader(BaseLoader):
         url = f"{self.base_url}/rest/api/2/issue/{issue_key}/comment"
         
         try:
-            response = self.session.get(url)
+            response = self.session.get(url, timeout=(5, 15))  # Shorter timeout for comments
             response.raise_for_status()
             
             data = response.json()
@@ -246,7 +248,7 @@ class JiraRealtimeLoader(JiraDocumentLoader):
         }
         
         try:
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=(10, 30))
             response.raise_for_status()
             
             data = response.json()

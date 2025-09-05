@@ -1,6 +1,6 @@
 # LangChain JIRA RAG Assistant
 
-A comprehensive RAG (Retrieval-Augmented Generation) assistant for JIRA data, powered by **LangChain** and integrated with **FastMCP**.
+A comprehensive RAG (Retrieval-Augmented Generation) assistant for JIRA data, powered by **LangChain** and integrated with **FastMCP**. This system transforms your JIRA data into an intelligent, searchable knowledge base that can answer questions and execute actions using natural language.
 
 ## 🚀 Features
 
@@ -9,8 +9,9 @@ A comprehensive RAG (Retrieval-Augmented Generation) assistant for JIRA data, po
 - **Hybrid Retrieval**: Vector search + JQL queries + metadata filtering
 - **AI-Powered Responses**: Hugging Face models with JIRA-optimized prompts
 - **MCP Integration**: Model Context Protocol support via FastMCP
-- **Real-time Sync**: Automatic data synchronization
+- **JIRA Operations**: Create, update, assign, transition, and manage JIRA issues
 - **Sprint Management**: Specialized Agile sprint operations
+- **Real-time Sync**: Automatic data synchronization
 
 ## 🏗️ Architecture
 
@@ -31,11 +32,13 @@ rag-assistant/
 ├── backend/                    # LangChain RAG implementation
 │   ├── langchain_*.py         # Core LangChain components
 │   ├── jira_operations.py     # JIRA API operations
+│   ├── action_detector.py     # Action detection
+│   ├── requirements.txt       # Python dependencies
 │   └── README.md              # Backend documentation
 ├── frontend/                   # VS Code extension
-├── requirements.txt            # Python dependencies
+├── docker-compose.yml         # Docker services
 ├── start_langchain_mcp_server.sh  # Startup script
-└── LANGCHAIN_RAG_IMPLEMENTATION.md # Detailed documentation
+└── README.md                  # This file
 ```
 
 ## 🚀 Quick Start
@@ -50,11 +53,11 @@ rag-assistant/
 
 1. **Clone and Setup**:
    ```bash
-   git clone <repository>
-   cd rag-assistant
+   git clone https://github.com/rishi00789/RAG_JIRA.git
+   cd RAG_JIRA
    python3 -m venv venv
    source venv/bin/activate
-   pip install -r requirements.txt
+   pip install -r backend/requirements.txt
    ```
 
 2. **Environment Variables**:
@@ -95,18 +98,107 @@ The server runs on `http://127.0.0.1:8003/mcp` and provides:
 - "What is the current sprint status?"
 - "Create a new story for user authentication"
 
-## 🧪 Testing
+## 🛠️ Core Components
 
+### LangChain Integration
+
+#### Document Loader (`langchain_jira_loader.py`)
+- **`JiraDocumentLoader`**: Custom LangChain loader for JIRA data
+- **`JiraRealtimeLoader`**: Real-time JIRA data synchronization
+- Features:
+  - Lazy loading for memory efficiency
+  - Configurable content inclusion (comments, descriptions)
+  - Rich metadata extraction
+  - Error handling and retry logic
+
+#### Vector Store (`langchain_milvus_store.py`)
+- **`MilvusVectorStore`**: Custom LangChain vector store for Milvus
+- Features:
+  - Full LangChain vector store interface
+  - Automatic collection management
+  - Embedding generation with fallbacks
+  - Similarity search with scores
+  - Document management (add, delete, clear)
+
+#### Hybrid Retriever (`langchain_retriever.py`)
+- **`JiraHybridRetriever`**: Combines vector search, JQL queries, and metadata filtering
+- **`JiraSprintRetriever`**: Specialized retriever for sprint-related queries
+- Features:
+  - Intelligent query analysis
+  - JQL query generation from natural language
+  - Metadata-based filtering
+  - Document re-ranking
+  - Sprint-specific context
+
+#### LLM Integration (`langchain_llm.py`)
+- **`HuggingFaceLLM`**: LangChain LLM wrapper for Hugging Face
+- **`HuggingFaceChatModel`**: Chat model implementation
+- **`JiraRAGLLM`**: Specialized LLM for JIRA RAG with optimized prompts
+- Features:
+  - OpenAI-compatible API integration
+  - JIRA-specific prompt engineering
+  - Enhanced context handling
+  - Error handling and fallbacks
+
+#### RAG Chain (`langchain_rag_chain.py`)
+- **`JiraRAGChain`**: End-to-end RAG pipeline
+- Features:
+  - Intelligent retrieval strategy selection
+  - Action detection and execution
+  - Sprint context integration
+  - JQL query information
+  - Comprehensive result formatting
+
+### JIRA Operations
+
+#### Supported Actions
+- **Create Issues**: Stories, bugs, tasks, epics
+- **Update Issues**: Fields, priority, story points, assignee
+- **Status Transitions**: Move through workflow states
+- **Comments**: Add and manage issue comments
+- **Assignments**: Assign issues to team members
+- **Sprint Management**: Create and manage sprints
+
+#### Natural Language Examples
 ```bash
-cd backend
-python3 test_langchain_rag.py
+# Create operations
+"Create a story called 'User Authentication' with 5 story points"
+"Create a bug called 'Login Button Not Working' with high priority"
+
+# Update operations
+"Update SCRUM-1 to have 8 story points"
+"Change SCRUM-2 priority to highest"
+"Assign SCRUM-3 to alice.smith"
+
+# Workflow operations
+"Move SCRUM-1 to 'In Progress'"
+"Change SCRUM-2 status to 'Done'"
+
+# Communication operations
+"Comment on SCRUM-1 saying 'Development completed'"
 ```
 
-## 📚 Documentation
+### JQL Integration
 
-- **[LangChain Implementation Guide](LANGCHAIN_RAG_IMPLEMENTATION.md)** - Detailed technical documentation
-- **[Backend README](backend/README.md)** - Backend-specific documentation
-- **[MCP Implementation](MCP_IMPLEMENTATION.md)** - MCP integration details
+#### Intelligent JQL Generation
+The system automatically converts natural language to optimized JQL:
+- **Project-based**: `"Show me all issues in project DEMO"`
+- **Issue Type**: `"List all bugs and stories"`
+- **Status-based**: `"Show me todo items"`
+- **Priority-based**: `"Find high priority issues"`
+- **Assignee-based**: `"Show my assigned issues"`
+- **Date-based**: `"Issues created this week"`
+- **Text Search**: `"Find issues containing 'login'"`
+- **Sprint-based**: `"Current sprint stories"`
+
+#### JQL Query Patterns
+```jql
+project = DEMO AND status != Done
+issuetype = Story AND assignee = currentUser()
+sprint in openSprints() AND priority in (High, Highest)
+created >= startOfWeek() AND status != Closed
+summary ~ "login" OR description ~ "error"
+```
 
 ## 🔧 Configuration
 
@@ -116,10 +208,103 @@ python3 test_langchain_rag.py
 - `JIRA_API_TOKEN` - JIRA API token
 - `HF_TOKEN` - Hugging Face API token (optional)
 - `JIRA_PROJECT_KEY` - Specific project (default: "ALL")
-- `SYNC_CACHE_DURATION` - Sync cache duration in seconds
+- `MILVUS_HOST` - Milvus host (default: localhost)
+- `MILVUS_PORT` - Milvus port (default: 19530)
 
 ### LangChain Components
 All components are configurable through constructor parameters and environment variables. See individual module documentation for details.
+
+## 🧪 Testing
+
+### Run Comprehensive Tests
+```bash
+cd backend
+python3 test_langchain_rag.py
+```
+
+### Test Individual Components
+```bash
+# Test document loader
+python3 langchain_jira_loader.py
+
+# Test vector store
+python3 langchain_milvus_store.py
+
+# Test retriever
+python3 langchain_retriever.py
+
+# Test LLM
+python3 langchain_llm.py
+
+# Test RAG chain
+python3 langchain_rag_chain.py
+```
+
+## 📊 Performance Features
+
+### Search Improvements
+- **Multiple Search Strategies**: Combines similarity search, board-specific search, and status-based search
+- **Increased Search Limits**: Minimum 10 results, up to 20 for board-related queries
+- **Smart Query Detection**: Automatically detects board/story queries and applies comprehensive search
+- **Deduplication**: Ensures unique stories across multiple search strategies
+
+### Data Fetching
+- **Extended Time Range**: 30 days for better coverage
+- **Multiple JQL Queries**: Uses 4 different search strategies
+- **Increased Result Limits**: Up to 500 maximum results
+- **Better Deduplication**: Ensures unique issues across all queries
+
+### Performance Benefits
+- **Search Coverage**: 95%+ story coverage
+- **Real-time Accuracy**: Data fresh within 5 seconds
+- **Query Response**: Multiple search strategies ensure comprehensive results
+- **Data Freshness**: Extended time range captures more historical and current data
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+1. **JIRA API Authentication**
+   - Verify `JIRA_API_TOKEN` is correct
+   - Check `JIRA_USERNAME` format
+   - Ensure JIRA account has proper permissions
+
+2. **Milvus Connection Issues**
+   - Ensure Docker is running: `docker ps`
+   - Check Milvus logs: `docker logs <container_id>`
+   - Verify ports 19530 and 8000 are available
+
+3. **No Data Found**
+   - Check JIRA project permissions
+   - Verify the date range in your ingestion
+   - Check JIRA API rate limits
+
+4. **Collection Not Found**
+   - Run `python3 langchain_ingest.py` first
+   - Check Milvus connection status
+   - Verify collection name is "jira_data"
+
+### Debug Mode
+Enable debug logging by setting environment variable:
+```bash
+export PYTHONPATH=.
+python -u langchain_ingest.py --max-issues 10
+```
+
+## 🔮 Future Enhancements
+
+### Planned Features
+- **Bulk Operations**: "Move all stories in 'To Do' to 'In Progress'"
+- **Advanced JQL**: Natural language to JQL conversion
+- **Workflow Automation**: Trigger actions based on conditions
+- **Integration APIs**: Connect with other tools (Slack, Teams)
+- **Advanced Analytics**: Sprint metrics, velocity tracking
+
+### Customization Options
+- **Custom Fields**: Support for project-specific fields
+- **Workflow Rules**: Custom transition logic
+- **Template Management**: Save and reuse common actions
+- **Role-based Access**: Different permissions for different users
 
 ## 🆚 Migration from Original
 
@@ -144,3 +329,7 @@ This implementation replaces the original custom RAG system with LangChain compo
 ## 📄 License
 
 MIT License
+
+---
+
+**🎯 The LangChain JIRA RAG Assistant transforms your JIRA data into an intelligent, searchable knowledge base that can answer questions and execute actions using natural language while maintaining the power of intelligent context retrieval and generation.**

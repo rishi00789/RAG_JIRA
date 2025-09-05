@@ -11,7 +11,7 @@ if [ ! -d "venv" ]; then
     echo "❌ Virtual environment not found. Please run setup first."
     echo "   python3 -m venv venv"
     echo "   source venv/bin/activate"
-    echo "   pip install -r requirements.txt"
+    echo "   pip install -r backend/requirements.txt"
     exit 1
 fi
 
@@ -67,7 +67,7 @@ fi
 
 # Install/upgrade dependencies if needed
 echo "📦 Checking dependencies..."
-pip install -q -r requirements.txt
+pip install -q -r backend/requirements.txt
 
 # Check if LangChain components are available
 echo "🧪 Testing LangChain components..."

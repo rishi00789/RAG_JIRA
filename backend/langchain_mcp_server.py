@@ -201,13 +201,13 @@ class LangChainJIRARAGMCPServer:
             # Get current sprint or specified sprint
             if sprint_name == 'current' or sprint_name is None:
                 # Get current active sprint
-                sprints = await self.jira_ops.get_agile_boards()
+                sprints = self.jira_ops.get_agile_boards()
                 if not sprints:
                     raise Exception("No agile boards found")
                 
                 # Get current sprint from the first board
                 board_id = sprints[0]['id']
-                current_sprint = await self.jira_ops.get_current_sprint(board_id)
+                current_sprint = self.jira_ops.get_current_sprint(board_id)
                 if not current_sprint:
                     raise Exception("No current sprint found")
                 
@@ -215,13 +215,13 @@ class LangChainJIRARAGMCPServer:
                 sprint_name = current_sprint['name']
             else:
                 # Find sprint by name
-                sprints = await self.jira_ops.get_agile_boards()
+                sprints = self.jira_ops.get_agile_boards()
                 if not sprints:
                     raise Exception("No agile boards found")
                 
                 sprint_id = None
                 for board in sprints:
-                    board_sprints = await self.jira_ops.get_sprint_stories(board['id'])
+                    board_sprints = self.jira_ops.get_sprint_stories(board['id'])
                     for sprint in board_sprints:
                         if sprint['name'].lower() == sprint_name.lower():
                             sprint_id = sprint['id']
@@ -233,7 +233,7 @@ class LangChainJIRARAGMCPServer:
                     raise Exception(f"Sprint '{sprint_name}' not found")
             
             # Get sprint issues
-            sprint_issues = await self.jira_ops.get_sprint_stories(sprint_id)
+            sprint_issues = self.jira_ops.get_sprint_stories(sprint_id)
             
             # Format sprint data
             sprint_data = []
@@ -264,7 +264,7 @@ class LangChainJIRARAGMCPServer:
                 raise Exception("JIRA operations not available")
             
             # Get agile boards
-            boards = await self.jira_ops.get_agile_boards()
+            boards = self.jira_ops.get_agile_boards()
             if not boards:
                 raise Exception("No agile boards found")
             
@@ -272,7 +272,7 @@ class LangChainJIRARAGMCPServer:
             
             # Get sprints from the first board
             board_id = boards[0]['id']
-            sprints = await self.jira_ops.get_sprint_stories(board_id)
+            sprints = self.jira_ops.get_sprint_stories(board_id)
             
             # Sort sprints by start date (most recent first)
             sprints.sort(key=lambda x: x.get('start_date', ''), reverse=True)
@@ -287,7 +287,7 @@ class LangChainJIRARAGMCPServer:
                 end_date = sprint.get('end_date', '')
                 
                 # Get sprint issues
-                sprint_issues = await self.jira_ops.get_sprint_stories(sprint_id)
+                sprint_issues = self.jira_ops.get_sprint_stories(sprint_id)
                 
                 # Calculate metrics
                 planned_points = 0

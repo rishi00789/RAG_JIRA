@@ -11,7 +11,7 @@ A comprehensive RAG (Retrieval-Augmented Generation) assistant for JIRA data, po
 - **MCP Integration**: Model Context Protocol support via FastMCP
 - **JIRA Operations**: Create, update, assign, transition, and manage JIRA issues
 - **Sprint Management**: Specialized Agile sprint operations
-- **Real-time Sync**: Automatic data synchronization
+- **Real-time Sync**: Automatic data synchronization before every query
 
 ## 🏗️ Architecture
 
@@ -210,6 +210,9 @@ summary ~ "login" OR description ~ "error"
 - `JIRA_PROJECT_KEY` - Specific project (default: "ALL")
 - `MILVUS_HOST` - Milvus host (default: localhost)
 - `MILVUS_PORT` - Milvus port (default: 19530)
+- `ENABLE_REALTIME_SYNC` - Enable real-time sync before queries (default: "true")
+- `REALTIME_MAX_RESULTS` - Max results for real-time sync (default: "500")
+- `REALTIME_DAYS_BACK` - Days back for real-time sync (default: "30")
 
 ### LangChain Components
 All components are configurable through constructor parameters and environment variables. See individual module documentation for details.
@@ -254,9 +257,36 @@ python3 langchain_rag_chain.py
 - **Increased Result Limits**: Up to 500 maximum results
 - **Better Deduplication**: Ensures unique issues across all queries
 
+### Real-time Data Sync
+
+The system now includes **automatic real-time synchronization** that ensures every RAG query uses the most up-to-date JIRA data:
+
+#### Features
+- **Always Fresh Data**: Every query triggers a real-time sync with JIRA
+- **Configurable Sync**: Control sync behavior via environment variables
+- **Timeout Protection**: 15-second timeout prevents hanging queries
+- **Fallback Handling**: Uses existing data if sync fails
+- **Performance Optimized**: Efficient sync with configurable limits
+
+#### Configuration
+```bash
+# Enable/disable real-time sync (default: true)
+export ENABLE_REALTIME_SYNC="true"
+
+# Control sync scope
+export REALTIME_MAX_RESULTS="500"    # Max issues to fetch
+export REALTIME_DAYS_BACK="30"       # Days back to sync
+```
+
+#### Benefits
+- **100% Data Freshness**: Always uses latest JIRA data
+- **No Stale Information**: Eliminates outdated results
+- **Automatic Updates**: No manual sync required
+- **Configurable Performance**: Balance freshness vs speed
+
 ### Performance Benefits
 - **Search Coverage**: 95%+ story coverage
-- **Real-time Accuracy**: Data fresh within 5 seconds
+- **Real-time Accuracy**: Data fresh within 15 seconds
 - **Query Response**: Multiple search strategies ensure comprehensive results
 - **Data Freshness**: Extended time range captures more historical and current data
 

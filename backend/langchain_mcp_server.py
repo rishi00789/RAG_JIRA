@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 try:
     from langchain_milvus_store import MilvusVectorStore
     from langchain_rag_chain import JiraRAGChain, create_jira_rag_chain
-    from langchain_jira_loader import JiraDocumentLoader
+    from langchain_jira_loader import JiraDocumentLoader, JiraRealtimeLoader
     from jira_operations import get_jira_operations
     from action_detector import detect_jira_action, ActionType
     LANGCHAIN_AVAILABLE = True
@@ -125,7 +125,52 @@ class LangChainJIRARAGMCPServer:
                     signal.alarm(30)  # 30 seconds for fast mode
                     logger.info("⚡ Fast mode enabled - reduced timeout to 30 seconds")
                 
-                # Process query using existing vector store data
+                # 🔄 REAL-TIME SYNC: Always fetch latest JIRA data before query
+                sync_performed = False
+                enable_realtime_sync = os.getenv("ENABLE_REALTIME_SYNC", "true").lower() == "true"
+                
+                if self.vector_store and enable_realtime_sync:
+                    try:
+                        logger.info("🔄 Performing real-time sync for latest JIRA data...")
+                        
+                        # Use timeout for sync operation
+                        def sync_timeout_handler(signum, frame):
+                            raise TimeoutError("Sync operation timed out")
+                        
+                        signal.signal(signal.SIGALRM, sync_timeout_handler)
+                        signal.alarm(15)  # 15 second timeout for sync
+                        
+                        try:
+                            # Use LangChain document loader for real-time sync
+                            from langchain_jira_loader import JiraRealtimeLoader
+                            
+                            realtime_loader = JiraRealtimeLoader(
+                                project_key=os.getenv("JIRA_PROJECT_KEY", "ALL"),
+                                max_results=int(os.getenv("REALTIME_MAX_RESULTS", "500")),
+                                days_back=int(os.getenv("REALTIME_DAYS_BACK", "30"))
+                            )
+                            
+                            # Load recent documents
+                            recent_docs = realtime_loader.load_recent_updates()
+                            
+                            if recent_docs:
+                                # Clear existing collection and add new documents
+                                self.vector_store.clear_collection()
+                                self.vector_store.add_documents(recent_docs)
+                                sync_performed = True
+                                logger.info(f"✅ Real-time sync completed - loaded {len(recent_docs)} documents")
+                            else:
+                                logger.info("ℹ️ No recent updates to sync")
+                                
+                        finally:
+                            signal.alarm(0)  # Cancel the alarm
+                    except TimeoutError:
+                        logger.warning("⚠️ Real-time sync timed out, using existing data")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Real-time sync failed, using existing data: {e}")
+                else:
+                    if not enable_realtime_sync:
+                        logger.info("ℹ️ Real-time sync disabled, using existing data")
                 
                 # Process query using LangChain RAG chain
                 logger.info("🔍 Processing query with LangChain RAG chain...")
@@ -148,8 +193,12 @@ class LangChainJIRARAGMCPServer:
                 )
                 
                 # Add processing information to result
-                result["sync_performed"] = False
-                result["sync_message"] = "Using existing vector store data"
+                if sync_performed:
+                    result["sync_performed"] = True
+                    result["sync_message"] = "Real-time sync completed - using latest data"
+                else:
+                    result["sync_performed"] = False
+                    result["sync_message"] = "Using existing vector store data"
                 
                 logger.info(f"✅ LangChain RAG query completed successfully")
                 return json.dumps(result, indent=2)

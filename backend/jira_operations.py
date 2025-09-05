@@ -160,6 +160,72 @@ class JiraOperations:
                 "success": False,
                 "message": str(e)
             }
+    
+    def get_agile_boards(self) -> List[Dict[str, Any]]:
+        """Get all agile boards"""
+        try:
+            url = f"{self.base_url}/rest/agile/1.0/board"
+            response = self.session.get(url)
+            response.raise_for_status()
+            
+            data = response.json()
+            return data.get('values', [])
+            
+        except Exception as e:
+            logger.error(f"Failed to get agile boards: {e}")
+            return []
+    
+    def get_current_sprint(self, board_id: int) -> Optional[Dict[str, Any]]:
+        """Get current active sprint for a board"""
+        try:
+            url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint"
+            params = {'state': 'active'}
+            response = self.session.get(url, params=params)
+            response.raise_for_status()
+            
+            data = response.json()
+            sprints = data.get('values', [])
+            return sprints[0] if sprints else None
+            
+        except Exception as e:
+            logger.error(f"Failed to get current sprint: {e}")
+            return None
+    
+    def get_sprint_stories(self, sprint_id: int) -> List[Dict[str, Any]]:
+        """Get stories/issues for a specific sprint"""
+        try:
+            url = f"{self.base_url}/rest/agile/1.0/sprint/{sprint_id}/issue"
+            params = {
+                'maxResults': 100,
+                'fields': 'summary,description,issuetype,status,assignee,priority,created,updated,customfield_10016'
+            }
+            response = self.session.get(url, params=params)
+            response.raise_for_status()
+            
+            data = response.json()
+            issues = data.get('issues', [])
+            
+            # Format issues for our use
+            formatted_issues = []
+            for issue in issues:
+                fields = issue.get('fields', {})
+                formatted_issues.append({
+                    'key': issue.get('key'),
+                    'summary': fields.get('summary', ''),
+                    'issue_type': fields.get('issuetype', {}).get('name', ''),
+                    'status': fields.get('status', {}).get('name', ''),
+                    'assignee': fields.get('assignee', {}).get('displayName', '') if fields.get('assignee') else '',
+                    'priority': fields.get('priority', {}).get('name', ''),
+                    'created': fields.get('created', ''),
+                    'updated': fields.get('updated', ''),
+                    'story_points': fields.get('customfield_10016', 0)  # Story points field
+                })
+            
+            return formatted_issues
+            
+        except Exception as e:
+            logger.error(f"Failed to get sprint stories: {e}")
+            return []
 
 # Global instance
 _jira_ops = None

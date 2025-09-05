@@ -428,7 +428,7 @@ class LangChainJIRARAGMCPServer:
                             raise TimeoutError("Sync operation timed out")
                         
                         signal.signal(signal.SIGALRM, sync_timeout_handler)
-                        signal.alarm(15)  # 15 second timeout for sync
+                        signal.alarm(10)  # 10 second timeout for sync
                         
                         try:
                             # Use LangChain document loader for real-time sync

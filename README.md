@@ -65,7 +65,7 @@ rag-assistant/
    export JIRA_BASE_URL="https://your-domain.atlassian.net"
    export JIRA_USERNAME="your-email@domain.com"
    export JIRA_API_TOKEN="your-api-token"
-   export HF_TOKEN="your-huggingface-token"  # Optional
+   export HF_TOKEN="your-huggingface-token"
    ```
 
 3. **Start Milvus**:

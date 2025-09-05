@@ -1,0 +1,13 @@
+fastapi==0.116.1
+uvicorn==0.35.0
+openai==1.99.9
+requests==2.32.4
+langchain==0.3.27
+langchain-community==0.3.27
+langchain-openai==0.3.27
+pymilvus==2.6.0
+python-dotenv==1.1.1
+fastmcp>=0.1.0
+mcp>=1.13.0
+sentence-transformers==3.1.1
+tiktoken==0.8.0 

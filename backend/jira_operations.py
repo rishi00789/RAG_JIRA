@@ -191,6 +191,21 @@ class JiraOperations:
             logger.error(f"Failed to get current sprint: {e}")
             return None
     
+    def get_sprints(self, board_id: int) -> List[Dict[str, Any]]:
+        """Get all sprints for a board"""
+        try:
+            url = f"{self.base_url}/rest/agile/1.0/board/{board_id}/sprint"
+            params = {'maxResults': 50}
+            response = self.session.get(url, params=params)
+            response.raise_for_status()
+            
+            data = response.json()
+            return data.get('values', [])
+            
+        except Exception as e:
+            logger.error(f"Failed to get sprints: {e}")
+            return []
+
     def get_sprint_stories(self, sprint_id: int) -> List[Dict[str, Any]]:
         """Get stories/issues for a specific sprint"""
         try:

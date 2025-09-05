@@ -215,15 +215,15 @@ class LangChainJIRARAGMCPServer:
                 sprint_name = current_sprint['name']
             else:
                 # Find sprint by name
-                sprints = self.jira_ops.get_agile_boards()
-                if not sprints:
+                boards = self.jira_ops.get_agile_boards()
+                if not boards:
                     raise Exception("No agile boards found")
                 
                 sprint_id = None
-                for board in sprints:
-                    board_sprints = self.jira_ops.get_sprint_stories(board['id'])
+                for board in boards:
+                    board_sprints = self.jira_ops.get_sprints(board['id'])
                     for sprint in board_sprints:
-                        if sprint['name'].lower() == sprint_name.lower():
+                        if sprint.get('name', '').lower() == sprint_name.lower():
                             sprint_id = sprint['id']
                             break
                     if sprint_id:
@@ -272,7 +272,7 @@ class LangChainJIRARAGMCPServer:
             
             # Get sprints from the first board
             board_id = boards[0]['id']
-            sprints = self.jira_ops.get_sprint_stories(board_id)
+            sprints = self.jira_ops.get_sprints(board_id)
             
             # Sort sprints by start date (most recent first)
             sprints.sort(key=lambda x: x.get('start_date', ''), reverse=True)
